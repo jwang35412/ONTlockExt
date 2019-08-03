@@ -1,7 +1,7 @@
 {
-    "name": "ONTlock",
-    "author": "Ryu Blockchain Technologies",
-    "description": "Chrome extension to store encrypted passwords on the Ontology blockchain",
+    "name": "ONTlockWallet",
+    "author": "Jawax",
+    "description": "Decentralized password manager hosted on the Ontology blockchain",
     "version": "1.0",
     "manifest_version": 2,
     "browser_action": {
