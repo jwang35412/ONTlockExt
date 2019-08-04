@@ -62,15 +62,31 @@ function addhttp(url) {
 
 app.controller('popupCtrl', ($scope /* , $http, $window */) => {
   $scope.isLoggedIn = localStorage.getItem('isLoggedIn');
-
-  // When first loaded
   $scope.addOrEdit = 'Add a password';
   $scope.showDetails = false;
   $scope.showPasswords = false;
   $scope.firstLoad = true;
   $scope.showAddPassword = false;
-
   $scope.showError = false;
+
+  if ($scope.isLoggedIn) {
+    const key = localStorage.getItem('pk');
+    const master = localStorage.getItem('master');
+    $scope.getPasswords(key, master).then((res) => {
+      if (res == null) {
+        $scope.isLoggedIn = false;
+        localStorage.setItem('isLoggedIn', false);
+      } else {
+        $scope.showDetails = false;
+        $scope.showPasswords = true;
+        $scope.showAddPassword = false;
+        $scope.showDetails = false;
+        $scope.firstLoad = false;
+      }
+    });
+  }
+
+  $scope.selectedPassword = {};
 
   $scope.logInClicked = () => {
     const pk = document.getElementById('private-key-input').value;
@@ -80,13 +96,9 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
         $scope.logIn();
         localStorage.setItem('isLoggedIn', true);
       } else {
-        $scope.showEror();
+        $scope.showError = true;
       }
     });
-  };
-
-  $scope.showEror = () => {
-    $scope.showError = true;
   };
 
   $scope.get = (pkey, handler) => {
@@ -288,25 +300,6 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
     $scope.showDetails = false;
     $scope.firstLoad = false;
   };
-
-  if ($scope.isLoggedIn) {
-    const key = localStorage.getItem('pk');
-    const master = localStorage.getItem('master');
-    $scope.getPasswords(key, master).then((res) => {
-      if (res == null) {
-        $scope.isLoggedIn = false;
-        localStorage.setItem('isLoggedIn', false);
-      } else {
-        $scope.showDetails = false;
-        $scope.showPasswords = true;
-        $scope.showAddPassword = false;
-        $scope.showDetails = false;
-        $scope.firstLoad = false;
-      }
-    });
-  }
-
-  $scope.selectedPassword = {};
 
   $scope.showDetailsForPassword = (pass) => {
     const pw = JSON.stringify(pass);
