@@ -13,7 +13,7 @@
     <div ng-controller="popupCtrl" id="mainPopup">
     	<div id="header" class="row">
     		<div class="col-xs-12">
-          <img src="img/OntLogo.png" id="logo"></img>
+          <img src="./images/icon.png" id="logo"></img>
     			<h1 id="title">ONTlock</h1>
           <a ng-if="showPasswords" ng-click="addPassword()" id="add-password">+</a>
     		</div>
@@ -47,7 +47,7 @@
                 ng-style="{ 'background': (isHover ? '#FAFAFA' : 'transparent') }"
                 ng-mouseenter="isHover = true;"
                 ng-mouseleave="isHover = false;">
-              <img src="OntLogo.png" id="icon-thumb">
+              <img src="./images/icon.png" id="icon-thumb">
               <p id="website-label">{{password.url}}</p>
               <p id="username-label">{{password.username}}</p>
               <hr>
