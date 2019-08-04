@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Decentralized password manager hosted on the Ontology blockchain",
   "author": "Jawax",
-  "repository": "https://github.com/Ryucoin/ONTlock",
+  "repository": "https://github.com/jwang35412/ONTlockWallet",
   "main": "main.js",
   "keywords": [
     "ontology",
