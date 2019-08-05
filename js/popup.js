@@ -112,7 +112,36 @@ function put(pkey, value) {
   });
 }
 
-function getUserData(privateKey, wif) { // eslint-disable-line
+function decryptString(string, password) {
+  const crypt = aesjs.utils.utf8.toBytes(password);
+  const encryptedBytes = aesjs.utils.hex.toBytes(string);
+  const aesCtr = new aesjs.ModeOfOperation.ctr(crypt); // eslint-disable-line
+  const decryptedBytes = aesCtr.decrypt(encryptedBytes);
+  const decryptedText = aesjs.utils.utf8.fromBytes(decryptedBytes);
+  return decryptedText;
+}
+
+function parseData(dct, password) {
+  const passwords = [];
+  const keys = Object.keys(dct);
+  const count = keys.length;
+  for (let i = 0; i < count; i += 1) {
+    const key = keys[i];
+    const website = decryptString(key, password);
+    const value = dct[key];
+    const username = decryptString(value.username, password);
+    const encryptedPassword = value.password;
+    const entry = {
+      website,
+      username,
+      encryptedPassword,
+    };
+    passwords.push(entry);
+  }
+  return passwords;
+}
+
+function getUserData(privateKey, password) { // eslint-disable-line
   return new Promise((resolve, reject) => {
     get(privateKey)
       .then((data) => {
@@ -120,21 +149,7 @@ function getUserData(privateKey, wif) { // eslint-disable-line
           resolve([]);
         } else {
           const val = ScriptBuilder.deserializeItem(data);
-          resolve(val);
-          // const crypt = aesjs.utils.utf8.toBytes(master);
-          // const encryptedBytes = aesjs.utils.hex.toBytes(data);
-          // const aesCtr = new aesjs.ModeOfOperation.ctr(crypt); // eslint-disable-line
-          // const decryptedBytes = aesCtr.decrypt(encryptedBytes);
-          // const decryptedText = aesjs.utils.utf8.fromBytes(decryptedBytes);
-          // try {
-          //   const arr = JSON.parse(decryptedText);
-          //   const fix = removeDuplicatesSafe(arr);
-          //   console.log(JSON.stringify(fix));
-          //   resolve(fix);
-          // } catch (error) {
-          //   console.log(error);
-          //   resolve(null);
-          // }
+          resolve(parseData(val, password));
         }
       })
       .catch((error) => {
@@ -204,12 +219,13 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
           $scope.errorMessage = '';
           $scope.showError = false;
 
-          const encryptedKey = getEncryptedKey(privateKey, padPassword(password));
+          const padded = padPassword(password);
+          const encryptedKey = getEncryptedKey(privateKey, padded);
           localStorage.setItem('encryptedKey', encryptedKey);
           localStorage.setItem('isLoggedIn', true);
 
           $scope.logIn();
-          getUserData(privateKey, wif)
+          getUserData(privateKey, padded)
             .then((data) => {
               console.log(data);
             })
