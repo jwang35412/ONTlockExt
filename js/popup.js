@@ -326,15 +326,16 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
     $scope.showPasswords = false;
     $scope.firstLoad = false;
 
-    const pass = localStorage.getItem('pass');
-    const parsed = JSON.parse(pass);
-    const un = parsed.username;
-    const pw = parsed.password;
-    const { url } = parsed;
+    const item = $scope.selected;
+    const {
+      url,
+      username,
+      password,
+    } = item;
 
-    document.getElementById('new-username').value = un;
+    document.getElementById('new-username').value = username;
     document.getElementById('new-url').value = url;
-    document.getElementById('new-password').value = pw;
+    document.getElementById('new-password').value = password;
   };
 
   $scope.close = () => {
