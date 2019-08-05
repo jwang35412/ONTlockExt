@@ -130,11 +130,11 @@ function parseData(dct, password) {
     const url = decryptString(key, password);
     const value = dct[key];
     const username = decryptString(value.username, password);
-    const encryptedPassword = value.password;
+    const pw = value.password;
     const entry = {
       url,
       username,
-      encryptedPassword,
+      password: pw,
     };
     passwords.push(entry);
   }
@@ -177,6 +177,7 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
   $scope.showAddPassword = false;
   $scope.showError = false;
   $scope.errorMessage = '';
+  $scope.selected = {};
 
   if ($scope.isLoggedIn) {
     // const key = localStorage.getItem('pk');
@@ -245,6 +246,12 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
   $scope.logIn = () => {
     $scope.firstLoad = false;
     $scope.showPasswords = true;
+  };
+
+  $scope.showDetailsForPassword = (item) => {
+    $scope.selected = item;
+    $scope.showDetails = true;
+    $scope.showPasswords = false;
   };
 
   $scope.encryptAndSerialize = (privateKey, master, dict, handler) => {
@@ -368,23 +375,16 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
     $scope.showAddPassword = false;
     $scope.showDetails = false;
     $scope.firstLoad = false;
+    $scope.selected = {};
   };
 
-  $scope.showDetailsForPassword = (pass) => {
-    const pw = JSON.stringify(pass);
-    localStorage.setItem('pass', pw);
-    $scope.showDetails = true;
-    $scope.showPasswords = false;
-  };
-
-  $scope.action = (pass, arg) => {
-    const pw = localStorage.getItem('pass');
-    const parsed = JSON.parse(pw);
+  $scope.action = (arg) => {
+    const item = $scope.selected;
     const {
+      url,
       username,
       password,
-      url,
-    } = parsed;
+    } = item;
 
     if (arg === 1) {
       // Copy Username
