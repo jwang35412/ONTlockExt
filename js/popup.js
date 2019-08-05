@@ -221,10 +221,10 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
   }
 
   $scope.logInClicked = () => {
-    const wif = document.getElementById('wif-key-input').value;
     const password = document.getElementById('password-input').value;
     const confirm = document.getElementById('confirm-password-input').value;
     if ($scope.notLoggedIn) {
+      const wif = document.getElementById('wif-key-input').value;
       if (wif.length < 52) {
         $scope.errorMessage = 'Error signing in, invalid length WIF';
         $scope.showError = true;
@@ -254,9 +254,10 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
                 $scope.logIn();
               })
               .catch((error) => {
-                console.error(error);
+                console.log(error);
                 $scope.passwords = [];
-                $scope.logIn();
+                $scope.errorMessage = 'Error signing in, network connection error';
+                $scope.showError = true;
               });
           } else {
             $scope.errorMessage = 'Error signing in, invalid WIF';
@@ -276,7 +277,14 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
     } else {
       const padded = padPassword(password);
       const encryptedKey = localStorage.getItem('encryptedKey');
+
       const prKey = decryptString(encryptedKey, padded);
+      if (prKey === '' || prKey == null) {
+        $scope.errorMessage = 'Error signing in, invalid password';
+        $scope.showError = true;
+        return;
+      }
+
       try {
         const privateKey = new PrivateKey(prKey);
         getUserData(privateKey)
@@ -286,9 +294,10 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
             $scope.logIn();
           })
           .catch((error) => {
-            console.error(error);
+            console.log(error);
             $scope.passwords = [];
-            $scope.logIn();
+            $scope.errorMessage = 'Error signing in, network connection error';
+            $scope.showError = true;
           });
       } catch (error) {
         console.log(error);
