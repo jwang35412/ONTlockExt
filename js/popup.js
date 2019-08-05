@@ -127,12 +127,12 @@ function parseData(dct, password) {
   const count = keys.length;
   for (let i = 0; i < count; i += 1) {
     const key = keys[i];
-    const website = decryptString(key, password);
+    const url = decryptString(key, password);
     const value = dct[key];
     const username = decryptString(value.username, password);
     const encryptedPassword = value.password;
     const entry = {
-      website,
+      url,
       username,
       encryptedPassword,
     };
@@ -141,7 +141,7 @@ function parseData(dct, password) {
   return passwords;
 }
 
-function getUserData(privateKey, password) { // eslint-disable-line
+function getUserData(privateKey, password) {
   return new Promise((resolve, reject) => {
     get(privateKey)
       .then((data) => {
@@ -226,11 +226,13 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
 
           $scope.logIn();
           getUserData(privateKey, padded)
-            .then((data) => {
-              console.log(data);
+            .then((items) => {
+              console.log(`Loaded ${items.length} passwords`);
+              $scope.passwords = items;
             })
             .catch((error) => {
               console.error(error);
+              $scope.passwords = [];
             });
         } else {
           $scope.errorMessage = 'Error signing in, invalid WIF';
