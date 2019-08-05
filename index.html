@@ -3,10 +3,10 @@
     <link rel="stylesheet" type="text/css" href="css/style.css">
     <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
     <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
-    <script src="js/aes.js"></script>
     <script src="js/angular.min.js"></script>
     <script src="js/jquery-3.3.1.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
     <script src="/lib/browser.js"></script>
+    <script type="text/javascript" src="bower_components/crypto-js/crypto-js.js"></script>
     <script src="js/popup.js"></script>
   </head>
   <body>
@@ -73,6 +73,8 @@
           <input id="new-username"></input>
           <p>Password</p>
           <input id="new-password" type="password"></input>
+          <p>Master Password</p>
+          <input id="master-password" type="password"></input>
           <a ng-click="addNewPassword()"><button>{{addOrEdit}}</button></a>
         </div>
       </div>
