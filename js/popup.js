@@ -97,7 +97,7 @@ function put(pkey, value) {
     const p2 = new Parameter('value', String, value);
     const functionName = 'put';
     const contractAddr = new Address(utils.reverseHex('c168e0fb1a2bddcd385ad013c2c98358eca5d4dc'));
-    const gasPrice = '0';
+    const gasPrice = '500';
     const gasLimit = '20000';
     const tx = TransactionBuilder.makeInvokeTransaction(functionName, [p1, p2], contractAddr, gasPrice, gasLimit, user);
     TransactionBuilder.signTransaction(tx, privateKey);
