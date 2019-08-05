@@ -108,10 +108,39 @@ function put(pkey, website, username, password) {
     const p4 = new Parameter('password', String, encPassword);
 
     const functionName = 'put';
-    const contractAddr = new Address(utils.reverseHex('c168e0fb1a2bddcd385ad013c2c98358eca5d4dc'));
+    const contractAddr = new Address(utils.reverseHex(contractHash));
     const gasPrice = '500';
     const gasLimit = '20000';
     const args = [p1, p2, p3, p4];
+    const tx = TransactionBuilder.makeInvokeTransaction(functionName, args, contractAddr, gasPrice, gasLimit, user);
+    TransactionBuilder.signTransaction(tx, privateKey);
+
+    client.sendRawTransaction(tx.serialize(), false)
+      .then((res) => {
+        resolve(res.result.Result);
+      })
+      .catch((error) => {
+        reject(error);
+      });
+  });
+}
+
+function deleteEntry(pkey, website) {
+  return new Promise((resolve, reject) => {
+    const privateKey = new PrivateKey(pkey);
+    const publicKey = privateKey.getPublicKey();
+    const user = Address.fromPubKey(publicKey);
+
+    const encWebsite = encryptString(website, privateKey.key);
+
+    const p1 = new Parameter('address', ByteArray, user.serialize());
+    const p2 = new Parameter('website', String, encWebsite);
+
+    const functionName = 'delete';
+    const contractAddr = new Address(utils.reverseHex(contractHash));
+    const gasPrice = '500';
+    const gasLimit = '20000';
+    const args = [p1, p2];
     const tx = TransactionBuilder.makeInvokeTransaction(functionName, args, contractAddr, gasPrice, gasLimit, user);
     TransactionBuilder.signTransaction(tx, privateKey);
 
@@ -182,6 +211,7 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
   $scope.showError = false;
   $scope.errorMessage = '';
   $scope.selected = {};
+  $scope.showDelete = false;
 
   $scope.logInClicked = () => {
     const wif = document.getElementById('wif-key-input').value;
@@ -276,7 +306,11 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
       $scope.editPassword();
     } else if (arg === 6) {
       // Delete
-      $scope.deletePassword();
+      if ($scope.showDelete) {
+        $scope.openDelete();
+      } else {
+        $scope.deletePassword();
+      }
     }
   };
 
@@ -293,15 +327,24 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
     $scope.firstLoad = false;
   };
 
+  $scope.openDelete = () => {
+    $scope.showDelete = true;
+  };
+
   $scope.deletePassword = () => {
-    const pass = localStorage.getItem('pass');
+    const item = $scope.selected;
+    const {
+      url,
+      username,
+      password,
+    } = item;
+
     const array = $scope.passwords;
 
     const { length } = array;
     for (let i = 0; i < length; i += 1) {
-      const current = JSON.stringify(array[i]);
-      console.log(current);
-      if (current === pass) {
+      const elem = array[i];
+      if (elem.url === url && elem.username === username && elem.password === password) {
         array.splice(i, 1);
         break;
       }
@@ -310,13 +353,19 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
     $scope.passwords = array;
     $scope.close();
 
-    // const pk = localStorage.getItem('pk');
-    // const master = localStorage.getItem('master');
-    //
-    // $scope.encryptAndSerialize(pk, master, $scope.passwords, (set) => {
-    //   const success = set.desc === 'SUCCESS';
-    //   console.log(`Success: ${success}`);
-    // });
+    const passcode = document.getElementById('delete-master-password').value; // TODO: fix
+    const padded = padPassword(passcode);
+    const encryptedKey = localStorage.getItem('encryptedKey');
+    const privateKey = decryptString(encryptedKey, padded);
+
+    deleteEntry(privateKey, url)
+      .then((res) => {
+        const success = res.desc === 'SUCCESS';
+        console.log(`Success: ${success}`);
+      })
+      .catch((error) => {
+        console.log(error);
+      });
   };
 
   $scope.editPassword = () => {
@@ -344,6 +393,7 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
     $scope.showAddPassword = false;
     $scope.showDetails = false;
     $scope.firstLoad = false;
+    $scope.showDelete = false;
   };
 
   $scope.addNewPassword = () => {
