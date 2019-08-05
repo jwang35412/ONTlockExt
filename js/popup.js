@@ -1,4 +1,4 @@
-/* global Ont angular localStorage chrome aesjs */
+/* global Ont angular localStorage chrome CryptoJS */
 
 const app = angular.module('mainpopup', []).config([
   '$compileProvider', ($compileProvider) => {
@@ -55,13 +55,18 @@ function padPassword(password) {
   return pw;
 }
 
+function decryptString(string, password) {
+  const bytes = CryptoJS.AES.decrypt(string, password);
+  const originalText = bytes.toString(CryptoJS.enc.Utf8);
+  return originalText;
+}
+
+function encryptString(string, password) {
+  return CryptoJS.AES.encrypt(string, password).toString();
+}
+
 function getEncryptedKey(privateKey, password) {
-  const crypt = aesjs.utils.utf8.toBytes(password);
-  const textBytes = aesjs.utils.utf8.toBytes(privateKey.key);
-  const aesCtr = new aesjs.ModeOfOperation.ctr(crypt); // eslint-disable-line
-  const encryptedBytes = aesCtr.encrypt(textBytes);
-  const value = aesjs.utils.hex.fromBytes(encryptedBytes);
-  return value;
+  return encryptString(privateKey.key, password);
 }
 
 function get(privateKey) {
@@ -87,19 +92,27 @@ function get(privateKey) {
   });
 }
 
-function put(pkey, value) {
+function put(pkey, website, username, password) {
   return new Promise((resolve, reject) => {
     const privateKey = new PrivateKey(pkey);
     const publicKey = privateKey.getPublicKey();
     const user = Address.fromPubKey(publicKey);
 
-    const p1 = new Parameter('user', ByteArray, user.serialize());
-    const p2 = new Parameter('value', String, value);
+    const encWebsite = encryptString(website, privateKey.key);
+    const encUsername = encryptString(username, privateKey.key);
+    const encPassword = encryptString(password, privateKey.key);
+
+    const p1 = new Parameter('address', ByteArray, user.serialize());
+    const p2 = new Parameter('website', String, encWebsite);
+    const p3 = new Parameter('username', String, encUsername);
+    const p4 = new Parameter('password', String, encPassword);
+
     const functionName = 'put';
     const contractAddr = new Address(utils.reverseHex('c168e0fb1a2bddcd385ad013c2c98358eca5d4dc'));
     const gasPrice = '500';
     const gasLimit = '20000';
-    const tx = TransactionBuilder.makeInvokeTransaction(functionName, [p1, p2], contractAddr, gasPrice, gasLimit, user);
+    const args = [p1, p2, p3, p4];
+    const tx = TransactionBuilder.makeInvokeTransaction(functionName, args, contractAddr, gasPrice, gasLimit, user);
     TransactionBuilder.signTransaction(tx, privateKey);
 
     client.sendRawTransaction(tx.serialize(), false)
@@ -112,36 +125,27 @@ function put(pkey, value) {
   });
 }
 
-function decryptString(string, password) {
-  const crypt = aesjs.utils.utf8.toBytes(password);
-  const encryptedBytes = aesjs.utils.hex.toBytes(string);
-  const aesCtr = new aesjs.ModeOfOperation.ctr(crypt); // eslint-disable-line
-  const decryptedBytes = aesCtr.decrypt(encryptedBytes);
-  const decryptedText = aesjs.utils.utf8.fromBytes(decryptedBytes);
-  return decryptedText;
-}
-
-function parseData(dct, password) {
+function parseData(dct, hexPrivateKey) {
   const passwords = [];
   const keys = Object.keys(dct);
   const count = keys.length;
   for (let i = 0; i < count; i += 1) {
     const key = keys[i];
-    const url = decryptString(key, password);
+    const url = decryptString(key, hexPrivateKey);
     const value = dct[key];
-    const username = decryptString(value.username, password);
-    const pw = value.password;
+    const username = decryptString(value.username, hexPrivateKey);
+    const password = decryptString(value.password, hexPrivateKey);
     const entry = {
       url,
       username,
-      password: pw,
+      password,
     };
     passwords.push(entry);
   }
   return passwords;
 }
 
-function getUserData(privateKey, password) {
+function getUserData(privateKey) {
   return new Promise((resolve, reject) => {
     get(privateKey)
       .then((data) => {
@@ -149,7 +153,8 @@ function getUserData(privateKey, password) {
           resolve([]);
         } else {
           const val = ScriptBuilder.deserializeItem(data);
-          resolve(parseData(val, password));
+          const parsed = parseData(val, privateKey.key);
+          resolve(parsed);
         }
       })
       .catch((error) => {
@@ -169,7 +174,6 @@ function privateKeyFromWif(wif, handler) {
 }
 
 app.controller('popupCtrl', ($scope /* , $http, $window */) => {
-  $scope.isLoggedIn = localStorage.getItem('isLoggedIn');
   $scope.addOrEdit = 'Add a password';
   $scope.showDetails = false;
   $scope.showPasswords = false;
@@ -178,25 +182,6 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
   $scope.showError = false;
   $scope.errorMessage = '';
   $scope.selected = {};
-
-  if ($scope.isLoggedIn) {
-    // const key = localStorage.getItem('pk');
-    // const master = localStorage.getItem('master');
-    // $scope.getPasswords(key, master).then((res) => {
-    //   if (res == null) {
-    //     $scope.isLoggedIn = false;
-    //     localStorage.setItem('isLoggedIn', false);
-    //   } else {
-    //     $scope.showDetails = false;
-    //     $scope.showPasswords = true;
-    //     $scope.showAddPassword = false;
-    //     $scope.showDetails = false;
-    //     $scope.firstLoad = false;
-    //   }
-    // });
-  }
-
-  $scope.selectedPassword = {};
 
   $scope.logInClicked = () => {
     const wif = document.getElementById('wif-key-input').value;
@@ -223,17 +208,17 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
           const padded = padPassword(password);
           const encryptedKey = getEncryptedKey(privateKey, padded);
           localStorage.setItem('encryptedKey', encryptedKey);
-          localStorage.setItem('isLoggedIn', true);
 
-          $scope.logIn();
-          getUserData(privateKey, padded)
+          getUserData(privateKey)
             .then((items) => {
               console.log(`Loaded ${items.length} passwords`);
               $scope.passwords = items;
+              $scope.logIn();
             })
             .catch((error) => {
               console.error(error);
               $scope.passwords = [];
+              $scope.logIn();
             });
         } else {
           $scope.errorMessage = 'Error signing in, invalid WIF';
@@ -254,21 +239,45 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
     $scope.showPasswords = false;
   };
 
-  $scope.encryptAndSerialize = (privateKey, master, dict, handler) => {
-    const str = JSON.stringify(dict);
-    const crypt = aesjs.utils.utf8.toBytes(master);
-    const textBytes = aesjs.utils.utf8.toBytes(str);
-    const aesCtr = new aesjs.ModeOfOperation.ctr(crypt); // eslint-disable-line
-    const encryptedBytes = aesCtr.encrypt(textBytes);
-    const value = aesjs.utils.hex.fromBytes(encryptedBytes);
-    put(privateKey, value)
-      .then((res) => {
-        handler(res);
-      })
-      .catch((error) => {
-        console.log(error);
-        handler(null);
+  $scope.action = (arg) => {
+    const item = $scope.selected;
+    const {
+      url,
+      username,
+      password,
+    } = item;
+
+    if (arg === 1) {
+      // Copy Username
+      const input = document.getElementById('copyfrom');
+      input.value = username;
+      input.select();
+      document.execCommand('copy');
+    } else if (arg === 2) {
+      // Copy Password
+      const input = document.getElementById('copyfrom');
+      input.value = password;
+      input.select();
+      document.execCommand('copy');
+    } else if (arg === 3) {
+      // Copy URL
+      const input = document.getElementById('copyfrom');
+      input.value = url;
+      input.select();
+      document.execCommand('copy');
+    } else if (arg === 4) {
+      // Go to URL
+      const newUrl = addhttp(url);
+      chrome.tabs.update({
+        url: newUrl,
       });
+    } else if (arg === 5) {
+      // Edit
+      $scope.editPassword();
+    } else if (arg === 6) {
+      // Delete
+      $scope.deletePassword();
+    }
   };
 
   $scope.addPassword = () => {
@@ -276,6 +285,7 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
     document.getElementById('new-username').value = '';
     document.getElementById('new-url').value = '';
     document.getElementById('new-password').value = '';
+    document.getElementById('master-password').value = '';
 
     $scope.showAddPassword = true;
     $scope.showDetails = false;
@@ -300,13 +310,13 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
     $scope.passwords = array;
     $scope.close();
 
-    const pk = localStorage.getItem('pk');
-    const master = localStorage.getItem('master');
-
-    $scope.encryptAndSerialize(pk, master, $scope.passwords, (set) => {
-      const success = set.desc === 'SUCCESS';
-      console.log(`Success: ${success}`);
-    });
+    // const pk = localStorage.getItem('pk');
+    // const master = localStorage.getItem('master');
+    //
+    // $scope.encryptAndSerialize(pk, master, $scope.passwords, (set) => {
+    //   const success = set.desc === 'SUCCESS';
+    //   console.log(`Success: ${success}`);
+    // });
   };
 
   $scope.editPassword = () => {
@@ -336,11 +346,12 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
   };
 
   $scope.addNewPassword = () => {
-    const un = document.getElementById('new-username').value;
-    const url = document.getElementById('new-url').value;
-    const pw = document.getElementById('new-password').value;
+    const username = document.getElementById('new-username').value;
+    const website = document.getElementById('new-url').value;
+    const password = document.getElementById('new-password').value;
+    const passcode = document.getElementById('master-password').value;
 
-    if ((un === '' || un == null) || (url === '' || url == null) || (pw === '' || pw == null)) {
+    if ((username === '' || username == null) || (website === '' || website == null) || (password === '' || password == null)) {
       $scope.showAddPassword = false;
       $scope.showDetails = false;
       $scope.showPasswords = true;
@@ -348,25 +359,20 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
       return;
     }
 
-    const pk = localStorage.getItem('pk');
-    const master = localStorage.getItem('master');
-
-    const newPassword = {
-      password: pw,
-      username: un,
-      url,
-    };
-
-    if (!$scope.passwords.includes(newPassword)) {
-      $scope.passwords.push(newPassword);
-    }
-
     $scope.close();
 
-    $scope.encryptAndSerialize(pk, master, $scope.passwords, (set) => {
-      const success = set.desc === 'SUCCESS';
-      console.log(`Success: ${success}`);
-    });
+    const padded = padPassword(passcode);
+    const encryptedKey = localStorage.getItem('encryptedKey');
+    const privateKey = decryptString(encryptedKey, padded);
+
+    put(privateKey, website, username, password)
+      .then((res) => {
+        const success = res.desc === 'SUCCESS';
+        console.log(`Success: ${success}`);
+      })
+      .catch((error) => {
+        console.log(error);
+      });
   };
 
   $scope.backPressed = () => {
@@ -376,49 +382,5 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
     $scope.showDetails = false;
     $scope.firstLoad = false;
     $scope.selected = {};
-  };
-
-  $scope.action = (arg) => {
-    const item = $scope.selected;
-    const {
-      url,
-      username,
-      password,
-    } = item;
-
-    if (arg === 1) {
-      // Copy Username
-      const input = document.getElementById('copyfrom');
-      input.value = username;
-      input.select();
-      document.execCommand('copy');
-      console.log(username);
-    } else if (arg === 2) {
-      // Copy Password
-      const input = document.getElementById('copyfrom');
-      input.value = password;
-      input.select();
-      document.execCommand('copy');
-      console.log(password);
-    } else if (arg === 3) {
-      // Copy URL
-      const input = document.getElementById('copyfrom');
-      input.value = url;
-      input.select();
-      document.execCommand('copy');
-      console.log(url);
-    } else if (arg === 4) {
-      // Go to URL
-      const newUrl = addhttp(url);
-      chrome.tabs.update({
-        url: newUrl,
-      });
-    } else if (arg === 5) {
-      // Edit
-      $scope.editPassword();
-    } else if (arg === 6) {
-      // Delete
-      $scope.deletePassword();
-    }
   };
 });
