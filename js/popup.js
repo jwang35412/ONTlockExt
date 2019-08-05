@@ -26,19 +26,6 @@ const {
 
 const client = new RpcClient('http://localhost:20336');
 
-// var passwords = {};
-
-function fixMaster(master) {
-  let rn = master;
-  if (rn.length > 16) {
-    return 'INVALID';
-  }
-  while (rn.length < 16) {
-    rn += 'a';
-  }
-  return rn;
-}
-
 function removeDuplicatesSafe(arr) {
   const seen = {};
   const retArr = [];
@@ -68,6 +55,7 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
   $scope.firstLoad = true;
   $scope.showAddPassword = false;
   $scope.showError = false;
+  $scope.errorMessage = '';
 
   if ($scope.isLoggedIn) {
     const key = localStorage.getItem('pk');
@@ -89,16 +77,31 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
   $scope.selectedPassword = {};
 
   $scope.logInClicked = () => {
-    const pk = document.getElementById('private-key-input').value;
-    const pw = document.getElementById('password-input').value;
-    $scope.isValidPrivateKey(pk, pw, (valid) => {
-      if (valid) {
-        $scope.logIn();
-        localStorage.setItem('isLoggedIn', true);
-      } else {
-        $scope.showError = true;
-      }
-    });
+    const wif = document.getElementById('wif-key-input').value;
+    const password = document.getElementById('password-input').value;
+    const confirm = document.getElementById('confirm-password-input').value;
+    if (wif.length < 52) {
+      $scope.errorMessage = 'Error signing in, invalid WIF';
+      $scope.showError = true;
+    } else if (password.length < 8) {
+      $scope.errorMessage = 'Error signing in, password must be longer than 8 characters';
+      $scope.showError = true;
+    } else if (password !== confirm) {
+      $scope.errorMessage = 'Error signing in, passwords do not match';
+      $scope.showError = true;
+    } else {
+      $scope.isValidWif(wif, (valid) => {
+        if (valid) {
+          $scope.errorMessage = '';
+          $scope.showError = false;
+          $scope.logIn();
+          localStorage.setItem('isLoggedIn', true);
+        } else {
+          $scope.errorMessage = 'Error signing in, invalid WIF';
+          $scope.showError = true;
+        }
+      });
+    }
   };
 
   $scope.get = (pkey, handler) => {
@@ -271,20 +274,12 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
     });
   };
 
-  $scope.isValidPrivateKey = async (key, pw, handler) => {
-    const master = fixMaster(pw);
-    const res = await $scope.getPasswords(key, master);
-    if (res == null) {
-      console.log('Incorrect password/privatekey combination');
+  $scope.isValidWif = async (wif, handler) => {
+    try {
+      const privateKey = PrivateKey.deserializeWIF(wif);
+      handler(privateKey != null);
+    } catch (error) {
       handler(false);
-    } else {
-      localStorage.setItem('pk', key);
-      localStorage.setItem('master', master);
-      $scope.passwords = res;
-      $scope.encryptAndSerialize(key, master, res, (set) => {
-        console.log(set.desc === 'SUCCESS');
-        handler(true);
-      });
     }
   };
 

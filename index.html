@@ -22,18 +22,16 @@
       <!-- First time loading page -->
       <div class="row" style="background-color: white" ng-if="firstLoad">
         <div class="col-xs-12" id="first-load">
-          <p>Private Key</p>
-          <input id="private-key-input"></input>
+          <p>WIF</p>
+          <input id="wif-key-input"></input>
           <p>Password</p>
           <input id="password-input" type="password"></input>
-          <h6>If this is your log in, you are creating a password</h6>
-          <h6 ng-if="showError" style="color: red">Could not sign in, check private key and try again</h6>
-
+          <p>Confirm Password</p>
+          <input id="confirm-password-input" type="password"></input>
+          <h6 ng-if="showError" style="color: red">{{errorMessage}}</h6>
           <a ng-click="logInClicked()"><button>Log In</button></a>
-
           <br><br>
           <hr><b>Or</b><hr><br>
-
           <a id="create-wallet" href="https://github.com/ontio/OWallet/releases" target="_blank">Create wallet to get started</a>
         </div>
       </div>
