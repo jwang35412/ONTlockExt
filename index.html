@@ -22,8 +22,10 @@
       <!-- First time loading page -->
       <div class="row" style="background-color: white" ng-if="firstLoad">
         <div class="col-xs-12" id="first-load">
-          <p>WIF</p>
-          <input id="wif-key-input"></input>
+          <div ng-if="notLoggedIn">
+            <p>WIF</p>
+            <input id="wif-key-input"></input>
+          </div>
           <p>Password</p>
           <input id="password-input" type="password"></input>
           <p>Confirm Password</p>

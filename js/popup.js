@@ -213,13 +213,57 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
   $scope.selected = {};
   $scope.showDelete = false;
 
+  const original = localStorage.getItem('encryptedKey');
+  if (original === '' || original == null) {
+    $scope.notLoggedIn = true;
+  } else {
+    $scope.notLoggedIn = false;
+  }
+
   $scope.logInClicked = () => {
     const wif = document.getElementById('wif-key-input').value;
     const password = document.getElementById('password-input').value;
     const confirm = document.getElementById('confirm-password-input').value;
-    if (wif.length < 52) {
-      $scope.errorMessage = 'Error signing in, invalid length WIF';
-      $scope.showError = true;
+    if ($scope.notLoggedIn) {
+      if (wif.length < 52) {
+        $scope.errorMessage = 'Error signing in, invalid length WIF';
+        $scope.showError = true;
+      } else if (password.length < 3) {
+        $scope.errorMessage = 'Error signing in, password must be longer than 3 characters';
+        $scope.showError = true;
+      } else if (password.length > 32) {
+        $scope.errorMessage = 'Error signing in, password must be shorter than 33 characters';
+        $scope.showError = true;
+      } else if (password !== confirm) {
+        $scope.errorMessage = 'Error signing in, passwords do not match';
+        $scope.showError = true;
+      } else {
+        privateKeyFromWif(wif, (privateKey) => {
+          if (privateKey != null) {
+            $scope.errorMessage = '';
+            $scope.showError = false;
+
+            const padded = padPassword(password);
+            const encryptedKey = getEncryptedKey(privateKey, padded);
+            localStorage.setItem('encryptedKey', encryptedKey);
+
+            getUserData(privateKey)
+              .then((items) => {
+                console.log(`Loaded ${items.length} passwords`);
+                $scope.passwords = items;
+                $scope.logIn();
+              })
+              .catch((error) => {
+                console.error(error);
+                $scope.passwords = [];
+                $scope.logIn();
+              });
+          } else {
+            $scope.errorMessage = 'Error signing in, invalid WIF';
+            $scope.showError = true;
+          }
+        });
+      }
     } else if (password.length < 3) {
       $scope.errorMessage = 'Error signing in, password must be longer than 3 characters';
       $scope.showError = true;
@@ -230,31 +274,27 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
       $scope.errorMessage = 'Error signing in, passwords do not match';
       $scope.showError = true;
     } else {
-      privateKeyFromWif(wif, (privateKey) => {
-        if (privateKey != null) {
-          $scope.errorMessage = '';
-          $scope.showError = false;
-
-          const padded = padPassword(password);
-          const encryptedKey = getEncryptedKey(privateKey, padded);
-          localStorage.setItem('encryptedKey', encryptedKey);
-
-          getUserData(privateKey)
-            .then((items) => {
-              console.log(`Loaded ${items.length} passwords`);
-              $scope.passwords = items;
-              $scope.logIn();
-            })
-            .catch((error) => {
-              console.error(error);
-              $scope.passwords = [];
-              $scope.logIn();
-            });
-        } else {
-          $scope.errorMessage = 'Error signing in, invalid WIF';
-          $scope.showError = true;
-        }
-      });
+      const padded = padPassword(password);
+      const encryptedKey = localStorage.getItem('encryptedKey');
+      const prKey = decryptString(encryptedKey, padded);
+      try {
+        const privateKey = new PrivateKey(prKey);
+        getUserData(privateKey)
+          .then((items) => {
+            console.log(`Loaded ${items.length} passwords`);
+            $scope.passwords = items;
+            $scope.logIn();
+          })
+          .catch((error) => {
+            console.error(error);
+            $scope.passwords = [];
+            $scope.logIn();
+          });
+      } catch (error) {
+        console.log(error);
+        $scope.errorMessage = 'Error signing in, invalid password';
+        $scope.showError = true;
+      }
     }
   };
 
