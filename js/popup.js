@@ -13,6 +13,7 @@ const {
   TransactionBuilder,
   RpcClient,
   utils,
+  ScriptBuilder,
 } = Ont;
 
 const {
@@ -25,19 +26,7 @@ const {
 } = ParameterType;
 
 const client = new RpcClient('http://localhost:20336');
-
-function removeDuplicatesSafe(arr) {
-  const seen = {};
-  const retArr = [];
-  for (let i = 0; i < arr.length; i += 1) {
-    const string = JSON.stringify(arr[i]);
-    if (!(string in seen)) {
-      retArr.push(arr[i]);
-      seen[string] = true;
-    }
-  }
-  return retArr;
-}
+const contractHash = 'c168e0fb1a2bddcd385ad013c2c98358eca5d4dc';
 
 function addhttp(url) {
   let xurl = url;
@@ -47,82 +36,59 @@ function addhttp(url) {
   return xurl;
 }
 
-app.controller('popupCtrl', ($scope /* , $http, $window */) => {
-  $scope.isLoggedIn = localStorage.getItem('isLoggedIn');
-  $scope.addOrEdit = 'Add a password';
-  $scope.showDetails = false;
-  $scope.showPasswords = false;
-  $scope.firstLoad = true;
-  $scope.showAddPassword = false;
-  $scope.showError = false;
-  $scope.errorMessage = '';
-
-  if ($scope.isLoggedIn) {
-    const key = localStorage.getItem('pk');
-    const master = localStorage.getItem('master');
-    $scope.getPasswords(key, master).then((res) => {
-      if (res == null) {
-        $scope.isLoggedIn = false;
-        localStorage.setItem('isLoggedIn', false);
-      } else {
-        $scope.showDetails = false;
-        $scope.showPasswords = true;
-        $scope.showAddPassword = false;
-        $scope.showDetails = false;
-        $scope.firstLoad = false;
-      }
-    });
+function padPassword(password) {
+  let pw = password;
+  let size = 0;
+  const { length } = pw;
+  if (length < 16) {
+    size = 16;
+  } else if (length < 24) {
+    size = 24;
+  } else if (length < 32) {
+    size = 32;
   }
 
-  $scope.selectedPassword = {};
+  const difference = size - length;
+  for (let i = 0; i < difference; i += 1) {
+    pw = `${pw}A`;
+  }
+  return pw;
+}
 
-  $scope.logInClicked = () => {
-    const wif = document.getElementById('wif-key-input').value;
-    const password = document.getElementById('password-input').value;
-    const confirm = document.getElementById('confirm-password-input').value;
-    if (wif.length < 52) {
-      $scope.errorMessage = 'Error signing in, invalid WIF';
-      $scope.showError = true;
-    } else if (password.length < 8) {
-      $scope.errorMessage = 'Error signing in, password must be longer than 8 characters';
-      $scope.showError = true;
-    } else if (password !== confirm) {
-      $scope.errorMessage = 'Error signing in, passwords do not match';
-      $scope.showError = true;
-    } else {
-      $scope.isValidWif(wif, (valid) => {
-        if (valid) {
-          $scope.errorMessage = '';
-          $scope.showError = false;
-          $scope.logIn();
-          localStorage.setItem('isLoggedIn', true);
-        } else {
-          $scope.errorMessage = 'Error signing in, invalid WIF';
-          $scope.showError = true;
-        }
-      });
-    }
-  };
+function getEncryptedKey(privateKey, password) {
+  const crypt = aesjs.utils.utf8.toBytes(password);
+  const textBytes = aesjs.utils.utf8.toBytes(privateKey.key);
+  const aesCtr = new aesjs.ModeOfOperation.ctr(crypt); // eslint-disable-line
+  const encryptedBytes = aesCtr.encrypt(textBytes);
+  const value = aesjs.utils.hex.fromBytes(encryptedBytes);
+  return value;
+}
 
-  $scope.get = (pkey, handler) => {
-    const privateKey = new PrivateKey(pkey);
+function get(privateKey) {
+  return new Promise((resolve, reject) => {
     const publicKey = privateKey.getPublicKey();
     const user = Address.fromPubKey(publicKey);
 
     const p1 = new Parameter('user', ByteArray, user.serialize());
-    const functionName = 'get';
-    const contractAddr = new Address(utils.reverseHex('c168e0fb1a2bddcd385ad013c2c98358eca5d4dc'));
+    const functionName = 'getAll';
+    const contractAddr = new Address(utils.reverseHex(contractHash));
     const gasPrice = '0';
     const gasLimit = '20000';
     const tx = TransactionBuilder.makeInvokeTransaction(functionName, [p1], contractAddr, gasPrice, gasLimit, user);
     TransactionBuilder.signTransaction(tx, privateKey);
 
-    client.sendRawTransaction(tx.serialize(), true).then((res) => {
-      handler(res.result.Result);
-    });
-  };
+    client.sendRawTransaction(tx.serialize(), true)
+      .then((res) => {
+        resolve(res.result.Result);
+      })
+      .catch((error) => {
+        reject(error);
+      });
+  });
+}
 
-  $scope.put = (pkey, value, handler) => {
+function put(pkey, value) {
+  return new Promise((resolve, reject) => {
     const privateKey = new PrivateKey(pkey);
     const publicKey = privateKey.getPublicKey();
     const user = Address.fromPubKey(publicKey);
@@ -136,34 +102,131 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
     const tx = TransactionBuilder.makeInvokeTransaction(functionName, [p1, p2], contractAddr, gasPrice, gasLimit, user);
     TransactionBuilder.signTransaction(tx, privateKey);
 
-    client.sendRawTransaction(tx.serialize(), false).then((res) => {
-      handler(res);
-    });
-  };
+    client.sendRawTransaction(tx.serialize(), false)
+      .then((res) => {
+        resolve(res.result.Result);
+      })
+      .catch((error) => {
+        reject(error);
+      });
+  });
+}
 
-  $scope.getPasswords = (privateKey, master) => { // eslint-disable-line
-    return new Promise((resolve) => {
-      $scope.get(privateKey, (data) => {
+function getUserData(privateKey, wif) { // eslint-disable-line
+  return new Promise((resolve, reject) => {
+    get(privateKey)
+      .then((data) => {
         if (data === '00') {
           resolve([]);
         } else {
-          const crypt = aesjs.utils.utf8.toBytes(master);
-          const encryptedBytes = aesjs.utils.hex.toBytes(data);
-          const aesCtr = new aesjs.ModeOfOperation.ctr(crypt); // eslint-disable-line
-          const decryptedBytes = aesCtr.decrypt(encryptedBytes);
-          const decryptedText = aesjs.utils.utf8.fromBytes(decryptedBytes);
-          try {
-            const arr = JSON.parse(decryptedText);
-            const fix = removeDuplicatesSafe(arr);
-            console.log(JSON.stringify(fix));
-            resolve(fix);
-          } catch (error) {
-            console.log(error);
-            resolve(null);
-          }
+          const val = ScriptBuilder.deserializeItem(data);
+          resolve(val);
+          // const crypt = aesjs.utils.utf8.toBytes(master);
+          // const encryptedBytes = aesjs.utils.hex.toBytes(data);
+          // const aesCtr = new aesjs.ModeOfOperation.ctr(crypt); // eslint-disable-line
+          // const decryptedBytes = aesCtr.decrypt(encryptedBytes);
+          // const decryptedText = aesjs.utils.utf8.fromBytes(decryptedBytes);
+          // try {
+          //   const arr = JSON.parse(decryptedText);
+          //   const fix = removeDuplicatesSafe(arr);
+          //   console.log(JSON.stringify(fix));
+          //   resolve(fix);
+          // } catch (error) {
+          //   console.log(error);
+          //   resolve(null);
+          // }
+        }
+      })
+      .catch((error) => {
+        reject(error);
+      });
+  });
+}
+
+function privateKeyFromWif(wif, handler) {
+  try {
+    const privateKey = PrivateKey.deserializeWIF(wif);
+    handler(privateKey);
+  } catch (error) {
+    console.log(error);
+    handler(null);
+  }
+}
+
+app.controller('popupCtrl', ($scope /* , $http, $window */) => {
+  $scope.isLoggedIn = localStorage.getItem('isLoggedIn');
+  $scope.addOrEdit = 'Add a password';
+  $scope.showDetails = false;
+  $scope.showPasswords = false;
+  $scope.firstLoad = true;
+  $scope.showAddPassword = false;
+  $scope.showError = false;
+  $scope.errorMessage = '';
+
+  if ($scope.isLoggedIn) {
+    // const key = localStorage.getItem('pk');
+    // const master = localStorage.getItem('master');
+    // $scope.getPasswords(key, master).then((res) => {
+    //   if (res == null) {
+    //     $scope.isLoggedIn = false;
+    //     localStorage.setItem('isLoggedIn', false);
+    //   } else {
+    //     $scope.showDetails = false;
+    //     $scope.showPasswords = true;
+    //     $scope.showAddPassword = false;
+    //     $scope.showDetails = false;
+    //     $scope.firstLoad = false;
+    //   }
+    // });
+  }
+
+  $scope.selectedPassword = {};
+
+  $scope.logInClicked = () => {
+    const wif = document.getElementById('wif-key-input').value;
+    const password = document.getElementById('password-input').value;
+    const confirm = document.getElementById('confirm-password-input').value;
+    if (wif.length < 52) {
+      $scope.errorMessage = 'Error signing in, invalid length WIF';
+      $scope.showError = true;
+    } else if (password.length < 3) {
+      $scope.errorMessage = 'Error signing in, password must be longer than 3 characters';
+      $scope.showError = true;
+    } else if (password.length > 32) {
+      $scope.errorMessage = 'Error signing in, password must be shorter than 33 characters';
+      $scope.showError = true;
+    } else if (password !== confirm) {
+      $scope.errorMessage = 'Error signing in, passwords do not match';
+      $scope.showError = true;
+    } else {
+      privateKeyFromWif(wif, (privateKey) => {
+        if (privateKey != null) {
+          $scope.errorMessage = '';
+          $scope.showError = false;
+
+          const encryptedKey = getEncryptedKey(privateKey, padPassword(password));
+          localStorage.setItem('encryptedKey', encryptedKey);
+          localStorage.setItem('isLoggedIn', true);
+
+          $scope.logIn();
+          getUserData(privateKey, wif)
+            .then((data) => {
+              console.log(data);
+            })
+            .catch((error) => {
+              console.error(error);
+            });
+        } else {
+          $scope.errorMessage = 'Error signing in, invalid WIF';
+          $scope.showError = true;
         }
       });
-    });
+    }
+  };
+
+  $scope.logIn = () => {
+    $scope.firstLoad = false;
+    $scope.showPasswords = true;
   };
 
   $scope.encryptAndSerialize = (privateKey, master, dict, handler) => {
@@ -173,7 +236,14 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
     const aesCtr = new aesjs.ModeOfOperation.ctr(crypt); // eslint-disable-line
     const encryptedBytes = aesCtr.encrypt(textBytes);
     const value = aesjs.utils.hex.fromBytes(encryptedBytes);
-    $scope.put(privateKey, value, handler);
+    put(privateKey, value)
+      .then((res) => {
+        handler(res);
+      })
+      .catch((error) => {
+        console.log(error);
+        handler(null);
+      });
   };
 
   $scope.addPassword = () => {
@@ -272,20 +342,6 @@ app.controller('popupCtrl', ($scope /* , $http, $window */) => {
       const success = set.desc === 'SUCCESS';
       console.log(`Success: ${success}`);
     });
-  };
-
-  $scope.isValidWif = async (wif, handler) => {
-    try {
-      const privateKey = PrivateKey.deserializeWIF(wif);
-      handler(privateKey != null);
-    } catch (error) {
-      handler(false);
-    }
-  };
-
-  $scope.logIn = () => {
-    $scope.firstLoad = false;
-    $scope.showPasswords = true;
   };
 
   $scope.backPressed = () => {
